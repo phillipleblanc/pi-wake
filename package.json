@@ -1,0 +1,29 @@
+{
+  "name": "pi-wake",
+  "version": "0.1.0",
+  "description": "Pi extension that schedules future user messages for monitoring long-running background jobs.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "wake",
+    "timer",
+    "coding-agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phillipleblanc/pi-wake.git"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  }
+}
