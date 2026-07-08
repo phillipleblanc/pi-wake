@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (semver like 0.1.1, or npm increment like patch/minor/major). Leave blank to use package.json."
+        required: false
+        type: string
+        default: ""
+      dry_run:
+        description: "Run npm publish --dry-run and skip GitHub release creation"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish npm package and create GitHub release
+    runs-on: ubuntu-latest
+    environment: npm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Use npm with trusted publishing support
+        run: npm install -g npm@latest
+
+      - name: Configure release version
+        id: release
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF_NAME}" != "main" ]]; then
+            echo "Release workflow must be run from the main branch." >&2
+            exit 1
+          fi
+
+          if [[ -n "${REQUESTED_VERSION}" ]]; then
+            npm version "${REQUESTED_VERSION}" --no-git-tag-version
+          fi
+
+          package_name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          tag="v${version}"
+
+          echo "package_name=${package_name}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+          echo "Package: ${package_name}"
+          echo "Version: ${version}"
+          echo "Tag: ${tag}"
+
+      - name: Ensure version is not already published
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npm view "${{ steps.release.outputs.package_name }}@${{ steps.release.outputs.version }}" version >/dev/null 2>&1; then
+            echo "${{ steps.release.outputs.package_name }}@${{ steps.release.outputs.version }} is already published on npm." >&2
+            exit 1
+          fi
+
+      - name: Ensure release tag does not already exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          if git rev-parse "${{ steps.release.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.release.outputs.tag }} already exists." >&2
+            exit 1
+          fi
+          if gh release view "${{ steps.release.outputs.tag }}" >/dev/null 2>&1; then
+            echo "GitHub release ${{ steps.release.outputs.tag }} already exists." >&2
+            exit 1
+          fi
+
+      - name: Commit version bump
+        if: ${{ inputs.version != '' && inputs.dry_run == false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package.json package-lock.json npm-shrinkwrap.json 2>/dev/null; then
+            echo "No version bump changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          [[ -f package-lock.json ]] && git add package-lock.json
+          [[ -f npm-shrinkwrap.json ]] && git add npm-shrinkwrap.json
+          git commit -m "Release ${{ steps.release.outputs.tag }}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Verify package contents
+        run: npm pack --dry-run
+
+      - name: Dry-run npm publish
+        if: ${{ inputs.dry_run == true }}
+        run: npm publish --dry-run --access public
+
+      - name: Publish to npm
+        if: ${{ inputs.dry_run == false }}
+        run: npm publish --access public --provenance
+
+      - name: Create GitHub release
+        if: ${{ inputs.dry_run == false }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_sha="$(git rev-parse HEAD)"
+          gh release create "${{ steps.release.outputs.tag }}" \
+            --target "${target_sha}" \
+            --title "${{ steps.release.outputs.tag }}" \
+            --generate-notes
