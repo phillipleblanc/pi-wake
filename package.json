@@ -1,5 +1,5 @@
 {
-  "name": "pi-wake",
+  "name": "@phillipleblanc/pi-wake",
   "version": "0.1.0",
   "description": "Pi extension that schedules future user messages for monitoring long-running background jobs.",
   "type": "module",
@@ -14,6 +14,13 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/phillipleblanc/pi-wake.git"
+  },
+  "homepage": "https://github.com/phillipleblanc/pi-wake#readme",
+  "bugs": {
+    "url": "https://github.com/phillipleblanc/pi-wake/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

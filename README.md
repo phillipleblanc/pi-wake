@@ -7,6 +7,12 @@ This is useful when an agent starts a long-running background job (for example, 
 ## Install
 
 ```bash
+pi install npm:@phillipleblanc/pi-wake
+```
+
+You can also install directly from GitHub:
+
+```bash
 pi install git:github.com/phillipleblanc/pi-wake
 ```
 
